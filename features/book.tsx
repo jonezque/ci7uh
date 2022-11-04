@@ -1,10 +1,10 @@
 import { Account } from "near-api-js/lib/account";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useConnect } from "../contexts/connect";
 import { Contract } from "near-api-js";
 import Table, { Market_View } from "./table";
 
-const getContract = (account: Account) =>
+const getContract = (account: Account): MarketContact =>
   new Contract(
     account, // the account object that is connecting
     process.env.NEXT_PUBLIC_CONTACT_ID!,
@@ -13,7 +13,12 @@ const getContract = (account: Account) =>
       viewMethods: ["markets", "view_market"], // view methods do not change state but usually return a value
       changeMethods: ["addMessage"], // change methods modify state
     }
-  );
+  ) as MarketContact;
+
+type MarketContact = Contract & {
+  markets: () => Promise<Market[]>;
+  view_market: (params: { market_id: number }) => Promise<Market_View>;
+};
 
 type Base = {
   ticker: string;
@@ -32,16 +37,22 @@ type Market = {
   quote: Quote;
 };
 
+const onMarketSelect = async (
+  id: number,
+  contract: MarketContact | null,
+  onDone: (marketView: Market_View) => void
+) => {
+  if (!contract) return;
+  const data = await contract.view_market({ market_id: id });
+  onDone(data);
+};
+
 export default () => {
   const { walletConnection, nearConnection } = useConnect();
 
-  const [contract, setContact] = useState<Contract | null>(null);
+  const [contract, setContact] = useState<MarketContact | null>(null);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [marketView, setMarketView] = useState<Market_View | null>(null);
-  const onSelect = useCallback(async (id: number, contract: any) => {
-    const data = await contract.view_market({ market_id: id });
-    setMarketView(data);
-  }, []);
 
   useEffect(() => {
     if (!nearConnection || !walletConnection) return;
@@ -53,13 +64,18 @@ export default () => {
       setContact(contract);
       const markets = (await (contract as any).markets()) as Market[];
       setMarkets(markets);
-      if (markets.length) onSelect(markets[0].id, contract);
+      if (markets.length)
+        onMarketSelect(markets[0].id, contract, setMarketView);
     });
   }, [nearConnection, walletConnection]);
 
   return (
     <div>
-      <select onChange={(ev) => onSelect(+ev.target.value, contract)}>
+      <select
+        onChange={(ev) =>
+          onMarketSelect(+ev.target.value, contract, setMarketView)
+        }
+      >
         {markets.map((x) => (
           <option value={x.id} key={x.id}>
             {x.base.ticker} / {x.quote.ticker}

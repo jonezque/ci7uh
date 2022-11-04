@@ -22,7 +22,7 @@ export default function Home() {
     <div className={styles.container}>
       <button
         disabled={!ready}
-        onClick={() => (signedIn ? onLogOut() : onLogin())}
+        onClick={signedIn ? onLogOut : onLogin}
       >
         {signedIn ? "Sign Out" : "sign In"}
       </button>
